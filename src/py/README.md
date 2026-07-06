@@ -1,0 +1,1 @@
+A chess engine I am building that will use an idea I had for efficiently updatable transformers. If this shows promise Ill rebuild in C++ with the trained weights and publish it somewhere.
