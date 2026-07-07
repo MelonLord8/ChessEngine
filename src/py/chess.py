@@ -47,12 +47,44 @@ class ChessBoard:
         self.moveNumber = 1
         self.halfMoves = 0
         self.check = None
+        #Kk
         self.kings : list[tuple[int, int]] = [(0, 4), (7, 4)]
         self.positions :  list[tuple[int, int]] = [(i, j) for i in [0, 1, 6, 7] for j in range(8)]
         self.positions.remove((0, 4))
         self.positions.remove((7, 4))
-        self.possibleMoves : list[Move] = self.exploreMoves(self.whitesTurn)
-
+        self.possibleMoves : list[Move] = self.exploreMoves()
+    
+    def __init__(self, fen_string: str):
+        fen_arr = fen_string.split(" ")
+        fenBoardState = fen_arr[0].split("/").reverse()
+        self.boardState = []
+        for row in fenBoardState:
+            new_row = ""
+            for chr in row:
+                if str.isnumeric(chr):
+                    new_row += "-"*int(chr)
+                else:
+                    new_row += chr
+            self.boardState.append(new_row)
+        self.whitesTurn = fen_arr[1] == "w"
+        castleString = fen_arr[2]
+        self.castling = ["K" in castleString, "Q" in castleString, "k" in castleString, "q" in castleString]
+        self.enPassant = None if fen_arr[3] == "-" else ord(fen_arr[3][0]) - 97
+        self.moveNumber = int(fen_arr[5])
+        self.halfMoves = int(fen_arr[4])
+        self.kings = [(-1, -1), (-1, -1)]
+        for i in range(8):
+            for j in range(8):
+                sqaure = self.boardState[i][j]
+                if(sqaure == "-"):
+                    continue
+                elif(sqaure == "k"):
+                    self.kings[1] = (i, j)
+                elif(sqaure == "K"):
+                    self.kings[0] = (i, j)
+                else:
+                    self.positions.append((i,j))
+        self.possibleMoves = self.exploreMoves()
     @staticmethod
     def validSquare(square : tuple[int, int]):
         return (square[0] >= 0 and square[0] <= 7 and square[1] >= 0 and square[1] <= 7)
@@ -180,13 +212,13 @@ class ChessBoard:
 
         state[move.newSquare[0]] = state[move.newSquare[0]][:move.newSquare[1]] + piece + state[move.newSquare[0]][move.newSquare[1] + 1:]
         state[move.oldSquare[0]] = state[move.oldSquare[0]][:move.oldSquare[1]] + '-' + state[move.oldSquare[0]][move.oldSquare[1] + 1:]
-        state[move.oldSquare[0]] = state[move.oldSquare[0]][:move.newSquare[1]] + '-' + state[move.oldSquare[0]][move.newSquare[1] + 1:]
+        if(move.enPassant):
+            state[move.oldSquare[0]] = state[move.oldSquare[0]][:move.newSquare[1]] + '-' + state[move.oldSquare[0]][move.newSquare[1] + 1:]
         return not ChessBoard.boardStateInCheck(state, white, kingSquare)
 
-    def exploreMoves(self, white = None):
+    def exploreMoves(self):
         out : list[tuple[tuple[int, int], tuple[int, int], str]] = []
-        if white is None:
-            white = self.whitesTurn
+        white = self.whitesTurn
         kingSquare = self.kings[not white]
         piece = self.boardState[kingSquare[0]][kingSquare[1]]
         for perm in kingPermutations:
@@ -376,5 +408,5 @@ class ChessBoard:
                     if(ChessBoard.validMove(move, self.boardState.copy(), white, kingSquare)):
                         print(self.boardState)
                         out.append(move)
-        return out
+        return out()
             
