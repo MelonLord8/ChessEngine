@@ -6,12 +6,13 @@ class Move:
     oldSquare: tuple[int, int]
     newSquare: tuple[int, int]
     promotion: str | None
+    enPassant: bool
 
-    def __init__(self, piece: str, oldSquare: tuple[int, int] = None, newSquare : tuple[int, int] = None, castleType : str | None = None, promotion : str | None = None ):
+    def __init__(self, piece: str, oldSquare: tuple[int, int] = None, newSquare : tuple[int, int] = None, castleType : str | None = None, promotion : str | None = None, enPassant: bool = False ):
         try:
             if piece is None:
                 raise ValueError()
-            if piece.lower() != "p" and not(promotion is None):
+            if piece.lower() != "p" and (not(promotion is None) or enPassant) :
                 raise ValueError()
             if piece.lower() != "k" and not(castleType is None):
                 raise ValueError()
@@ -42,7 +43,7 @@ class ChessBoard:
         self.whitesTurn = True
         #KQkq
         self.castling = [True, True, True, True]
-        self.enPassant = None 
+        self.enPassant : int | None = None 
         self.moveNumber = 1
         self.halfMoves = 0
         self.check = None
@@ -178,7 +179,8 @@ class ChessBoard:
         piece = state[move.oldSquare[0]][move.oldSquare[1]]
 
         state[move.newSquare[0]] = state[move.newSquare[0]][:move.newSquare[1]] + piece + state[move.newSquare[0]][move.newSquare[1] + 1:]
-        state[move.oldSquare[0]] = state[move.oldSquare[0]][:move.oldSquare[1]] + '-' + state[move.oldSquare[0]][move.newSquare[1] + 1:]
+        state[move.oldSquare[0]] = state[move.oldSquare[0]][:move.oldSquare[1]] + '-' + state[move.oldSquare[0]][move.oldSquare[1] + 1:]
+        state[move.oldSquare[0]] = state[move.oldSquare[0]][:move.newSquare[1]] + '-' + state[move.oldSquare[0]][move.newSquare[1] + 1:]
         return not ChessBoard.boardStateInCheck(state, white, kingSquare)
 
     def exploreMoves(self, white = None):
@@ -246,6 +248,10 @@ class ChessBoard:
                         move = Move(piece, square, (square[0] + 2, square[1]), None, None)
                         if(ChessBoard.validMove(move, self.boardState.copy(), white, kingSquare)):
                             out.append(move)
+                    elif square[0] == 4 and not(self.enPassant is None) and abs(self.enPassant - square[1]) == 1:
+                        move = Move(piece, square, (square[0] + 1, self.enPassant), enPassant= True)
+                        if(ChessBoard.validMove(move, self.boardState.copy(), white, kingSquare)):
+                            out.append(move)
             elif piece == "p":
                 if self.boardState[square[0] - 1][square[1]] == "-" :
                     move = Move(piece, square, (square[0] - 1, square[1]), None, None)
@@ -257,6 +263,10 @@ class ChessBoard:
                             out.append(Move(square, (square[0] - 1, square[1]), None, None))
                     if square[0] == 6 and self.boardState[square[0] - 2][square[1]] == "-":
                         move = Move(piece, square, (square[0] - 2, square[1]), None, None)
+                        if(ChessBoard.validMove(move, self.boardState.copy(), white, kingSquare)):
+                            out.append(move)
+                    elif square[0] == 3 and not(self.enPassant is None) and abs(self.enPassant - square[1]) == 1:
+                        move = Move(piece, square, (square[0] - 1, self.enPassant), enPassant= True)
                         if(ChessBoard.validMove(move, self.boardState.copy(), white, kingSquare)):
                             out.append(move)
             if pieceType in ["r", "q"]:
