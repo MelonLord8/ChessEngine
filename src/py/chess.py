@@ -1,5 +1,8 @@
 knight_permutations = [(1, 2), (1, -2), (-1, -2), (-1, 2), (2, 1), (2, -1), (-2, -1), (-2, 1)]
 kingPermutations = [(1, 1), (1, 0), (0, 1), (0, -1), (1, -1), (-1, -1), (-1, 1), (-1, 0)]
+RESET = "\x1b[0m"
+PURPLE = "\x1b[38;2;0;0;0;48;5;99m"
+WHITE = "\x1b[30;107m"        
 class Move:
     piece: str 
     castleType: str | None
@@ -26,38 +29,28 @@ class Move:
                         raise ValueError()
                         
         except:
-            raise ValueError("Parameters isCastle: {isCastle}, castleType: {castleType}, old_square: {old_square}, new_square {new_square}, promotion {promotion} is invalid")
+            raise ValueError(f"Parameters, castleType: {castleType}, old_square: {oldSquare}, new_square {newSquare}, promotion {promotion} is invalid")
         self.piece = piece
         self.castleType = castleType
         self.oldSquare = oldSquare
         self.newSquare = newSquare
         self.promotion = promotion
+        self.enPassant = enPassant
 
     def __str__(self):
         return f"( {self.piece}, {self.oldSquare}, {self.newSquare}, {self.castleType}, {self.promotion} )"
     def __repr__(self):
         return self.__str__()
 class ChessBoard:
-    def __init__(self):
-        self.boardState : list[str] = ["RNBQKBNR", "PPPPPPPP", "--------", "--------", "--------", "--------", "pppppppp", "rnbqkbnr"]
-        self.whitesTurn = True
-        #KQkq
-        self.castling = [True, True, True, True]
-        self.enPassant : int | None = None 
-        self.moveNumber = 1
-        self.halfMoves = 0
-        self.check = None
-        #Kk
-        self.kings : list[tuple[int, int]] = [(0, 4), (7, 4)]
-        self.positions :  list[tuple[int, int]] = [(i, j) for i in [0, 1, 6, 7] for j in range(8)]
-        self.positions.remove((0, 4))
-        self.positions.remove((7, 4))
-        self.possibleMoves : list[Move] = self.exploreMoves()
     
-    def __init__(self, fen_string: str):
+    def __init__(self, fen_string: str = None):
+        if fen_string is None:
+            fen_string = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
         fen_arr = fen_string.split(" ")
-        fenBoardState = fen_arr[0].split("/").reverse()
+        fenBoardState = fen_arr[0].split("/")
+        fenBoardState.reverse()
         self.boardState = []
+        self.check = None
         for row in fenBoardState:
             new_row = ""
             for chr in row:
@@ -73,6 +66,7 @@ class ChessBoard:
         self.moveNumber = int(fen_arr[5])
         self.halfMoves = int(fen_arr[4])
         self.kings = [(-1, -1), (-1, -1)]
+        self.positions = []
         for i in range(8):
             for j in range(8):
                 sqaure = self.boardState[i][j]
@@ -85,6 +79,31 @@ class ChessBoard:
                 else:
                     self.positions.append((i,j))
         self.possibleMoves = self.exploreMoves()
+    def print(self, flip: bool = False):
+        if not flip:
+            for i in range(7, -1, -1):
+                for j in range(8):
+                    colour = PURPLE if ((i + j) % 2 == 0) else WHITE
+                    print(colour, end = "")
+                    piece = self.boardState[i][j]
+                    if piece == "-":
+                        print(" ", end = "")
+                    else:
+                        print(piece, end = "")
+                print(RESET)
+        else:
+            for i in range(8):
+                for j in range(7, -1, -1):
+                    colour = PURPLE if ((i + j) % 2) == 0 else WHITE
+                    print(colour , end = "")
+                    piece = self.boardState[i][j]
+                    if piece == "-":
+                        print(" ", end = "")
+                    else:
+                        print(piece, end = "")
+                print(RESET)
+
+
     @staticmethod
     def validSquare(square : tuple[int, int]):
         return (square[0] >= 0 and square[0] <= 7 and square[1] >= 0 and square[1] <= 7)
@@ -243,7 +262,7 @@ class ChessBoard:
                 
             for i in range(5, 7):
                 if (not kingSideCastle): break
-                kingSideCastle = kingSideCastle and (self.inCheck(white, (7 * (not white),i)))
+                kingSideCastle = kingSideCastle and not(self.inCheck(white, (7 * (not white),i)))
 
             if(kingSideCastle):
                 out.append(Move(piece, None, None, True, "K" if white else "k"))
@@ -253,9 +272,9 @@ class ChessBoard:
                 if (not queenSideCastle): break
                 queenSideCastle = queenSideCastle and (self.boardState[7 * (not white)][i] == "-")
                 
-            for i in range(1, 4):
+            for i in range(2, 4):
                 if (not queenSideCastle): break
-                queenSideCastle = queenSideCastle and (self.inCheck(white, (7 * (not white),i)))
+                queenSideCastle = queenSideCastle and not(self.inCheck(white, (7 * (not white),i)))
             if(queenSideCastle):
                 out.append(Move(piece, None, None, True, "Q" if white else "q"))
             
@@ -292,7 +311,7 @@ class ChessBoard:
                             for promType in ["q", "n", "b" "r"]:
                                 out.append(Move(square, (square[0] - 1, square[1]), None, promType))
                         else:
-                            out.append(Move(square, (square[0] - 1, square[1]), None, None))
+                            out.append(Move(piece, square, (square[0] - 1, square[1]), None, None))
                     if square[0] == 6 and self.boardState[square[0] - 2][square[1]] == "-":
                         move = Move(piece, square, (square[0] - 2, square[1]), None, None)
                         if(ChessBoard.validMove(move, self.boardState.copy(), white, kingSquare)):
@@ -406,7 +425,6 @@ class ChessBoard:
                         continue
                     move = Move(piece, square, newSquare, None, None)
                     if(ChessBoard.validMove(move, self.boardState.copy(), white, kingSquare)):
-                        print(self.boardState)
                         out.append(move)
-        return out()
+        return out
             
