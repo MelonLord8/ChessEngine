@@ -10,24 +10,30 @@ class Move:
     newSquare: tuple[int, int]
     promotion: str | None
     enPassant: bool
+    isDirectCapture: bool
 
-    def __init__(self, piece: str, oldSquare: tuple[int, int] = None, newSquare : tuple[int, int] = None, castleType : str | None = None, promotion : str | None = None, enPassant: bool = False ):
+    def __init__(self, piece: str, oldSquare: tuple[int, int] = None, newSquare : tuple[int, int] = None, castleType : str | None = None, promotion : str | None = None, enPassant: bool = False, isDirectCapture : bool = False):
         try:
-            if piece is None:
-                raise ValueError()
-            if piece.lower() != "p" and (not(promotion is None) or enPassant) :
-                raise ValueError()
-            if piece.lower() != "k" and not(castleType is None):
-                raise ValueError()
-            if not (castleType is None):
-                if(not (castleType in ['k', 'q', "K", "Q"] and oldSquare is None and newSquare is None and promotion is None)):
+            if castleType is None:
+                if piece is None: # Only one can be true at the same time
+                    raise ValueError()
+                if (piece.lower() != "p" and (not(promotion is None) or enPassant)) :
                     raise ValueError()
                 if(not (ChessBoard.validSquare(oldSquare) and ChessBoard.validSquare(newSquare) and oldSquare != newSquare)):
-                    raise ValueError()
-                if(not promotion is None):
+                        raise ValueError()
+                if(not (promotion is None)):
                     if not((newSquare[1] == 7 and promotion in ["N", "Q", "R", "B"]) or (newSquare[1] == 0 and promotion in ["n", "q", "r", "b"])):
                         raise ValueError()
-                        
+                if not (castleType is None): # Only if castling
+                    if(not (castleType in ['k', 'q', "K", "Q"] and oldSquare is None and newSquare is None and promotion is None)):
+                        raise ValueError()
+                    if(not (promotion is None)):
+                        raise ValueError()
+                    if (isDirectCapture):
+                        raise ValueError()
+            else:
+                if not(piece is None):
+                    raise ValueError()
         except:
             raise ValueError(f"Parameters, castleType: {castleType}, old_square: {oldSquare}, new_square {newSquare}, promotion {promotion} is invalid")
         self.piece = piece
@@ -36,9 +42,9 @@ class Move:
         self.newSquare = newSquare
         self.promotion = promotion
         self.enPassant = enPassant
-
+        self.isDirectCapture = isDirectCapture
     def __str__(self):
-        return f"( {self.piece}, {self.oldSquare}, {self.newSquare}, {self.castleType}, {self.promotion} )"
+        return f"( {self.piece}, {self.oldSquare}, {self.newSquare}, {self.castleType}, {self.promotion}, {self.enPassant})"
     def __repr__(self):
         return self.__str__()
 class ChessBoard:
@@ -49,7 +55,7 @@ class ChessBoard:
         fen_arr = fen_string.split(" ")
         fenBoardState = fen_arr[0].split("/")
         fenBoardState.reverse()
-        self.boardState = []
+        self.boardState : list[str] = []
         self.check = None
         for row in fenBoardState:
             new_row = ""
@@ -59,25 +65,25 @@ class ChessBoard:
                 else:
                     new_row += chr
             self.boardState.append(new_row)
-        self.whitesTurn = fen_arr[1] == "w"
+        self.whitesTurn : bool = fen_arr[1] == "w"
         castleString = fen_arr[2]
-        self.castling = ["K" in castleString, "Q" in castleString, "k" in castleString, "q" in castleString]
-        self.enPassant = None if fen_arr[3] == "-" else ord(fen_arr[3][0]) - 97
-        self.moveNumber = int(fen_arr[5])
-        self.halfMoves = int(fen_arr[4])
-        self.kings = [(-1, -1), (-1, -1)]
-        self.positions = []
+        self.castling : list[str] = ["K" in castleString, "Q" in castleString, "k" in castleString, "q" in castleString]
+        self.enPassant : int | None = None if fen_arr[3] == "-" else ord(fen_arr[3][0]) - 97
+        self.moveNumber : int = int(fen_arr[5])
+        self.halfMoves : int= int(fen_arr[4])
+        self.kings : list[tuple[int, int]]= [(-1, -1), (-1, -1)]
+        self.positions : list[list[tuple[int, int]]] = [[],[]]
         for i in range(8):
             for j in range(8):
-                sqaure = self.boardState[i][j]
-                if(sqaure == "-"):
+                square: str = self.boardState[i][j]
+                if(square == "-"):
                     continue
-                elif(sqaure == "k"):
+                elif(square == "k"):
                     self.kings[1] = (i, j)
-                elif(sqaure == "K"):
+                elif(square == "K"):
                     self.kings[0] = (i, j)
                 else:
-                    self.positions.append((i,j))
+                    self.positions[square.lower() == square].append((i,j))
         self.possibleMoves = self.exploreMoves()
     def print(self, flip: bool = False):
         if not flip:
@@ -86,10 +92,11 @@ class ChessBoard:
                     colour = PURPLE if ((i + j) % 2 == 0) else WHITE
                     print(colour, end = "")
                     piece = self.boardState[i][j]
+                    piece_print = self.getPieceUnicode(piece)
                     if piece == "-":
-                        print(" ", end = "")
+                        print("  ", end = "")
                     else:
-                        print(piece, end = "")
+                        print(piece_print, end = "")
                 print(RESET)
         else:
             for i in range(8):
@@ -97,13 +104,40 @@ class ChessBoard:
                     colour = PURPLE if ((i + j) % 2) == 0 else WHITE
                     print(colour , end = "")
                     piece = self.boardState[i][j]
+                    piece_print = self.getPieceUnicode(piece)
                     if piece == "-":
-                        print(" ", end = "")
+                        print("  ", end = "")
                     else:
-                        print(piece, end = "")
+                        print(piece_print, end = "")
                 print(RESET)
 
-
+    @staticmethod
+    def getPieceUnicode(piece: str):
+        match piece:
+            case "K":
+                return "♔ "
+            case "k":
+                return "♚ "
+            case "P":
+                return "♙ "
+            case "p":
+                return "♟︎ "
+            case "Q":
+                return "♕ "
+            case "q":
+                return "♛ "
+            case "N":
+                return "♘ "
+            case "n":
+                return "♞ "
+            case "R":
+                return "♖ "
+            case "r":
+                return "♜ "
+            case "B":
+                return "♗ "
+            case "b":
+                return "♝ "
     @staticmethod
     def validSquare(square : tuple[int, int]):
         return (square[0] >= 0 and square[0] <= 7 and square[1] >= 0 and square[1] <= 7)
@@ -246,16 +280,17 @@ class ChessBoard:
             if(not ChessBoard.validSquare(newSquare)):
                 continue
             existingPiece = self.boardState[newSquare[0]][newSquare[1]]
-            if (existingPiece.lower() == existingPiece) != white and existingPiece != "-":
+            if ((existingPiece.lower() == existingPiece) != white) and existingPiece != "-":
                 continue
+            isCapture = existingPiece != "-"
             tempState[newSquare[0]] = tempState[newSquare[0]][:newSquare[1]] + piece + tempState[newSquare[0]][newSquare[1] + 1:]
             tempState[kingSquare[0]] = tempState[kingSquare[0]][:kingSquare[1]] + '-' + tempState[kingSquare[0]][kingSquare[1] + 1:]
 
             if(not ChessBoard.boardStateInCheck(tempState, white, newSquare)):
-                out.append(Move(piece, kingSquare, newSquare))
+                out.append(Move(piece, kingSquare, newSquare, isDirectCapture= isCapture))
                 
         if(not self.kingInCheck()):
-            kingSideCastle = self.castling[(not white)]
+            kingSideCastle = self.castling[2*(not white)]
             for i in range(5, 7):
                 if (not kingSideCastle): break
                 kingSideCastle = kingSideCastle and (self.boardState[7 * (not white)][i] == "-")
@@ -265,9 +300,9 @@ class ChessBoard:
                 kingSideCastle = kingSideCastle and not(self.inCheck(white, (7 * (not white),i)))
 
             if(kingSideCastle):
-                out.append(Move(piece, None, None, True, "K" if white else "k"))
+                out.append(Move(None, castleType= "K" if white else "k"))
 
-            queenSideCastle = self.castling[(not white + 1)]
+            queenSideCastle = self.castling[2*(not white) + 1]
             for i in range(1, 4):
                 if (not queenSideCastle): break
                 queenSideCastle = queenSideCastle and (self.boardState[7 * (not white)][i] == "-")
@@ -276,10 +311,10 @@ class ChessBoard:
                 if (not queenSideCastle): break
                 queenSideCastle = queenSideCastle and not(self.inCheck(white, (7 * (not white),i)))
             if(queenSideCastle):
-                out.append(Move(piece, None, None, True, "Q" if white else "q"))
+                out.append(Move(None, castleType= "Q" if white else "q"))
             
 
-        for square in self.positions:
+        for square in self.positions[not white]:
             piece = self.boardState[square[0]][square[1]] 
             if((piece == piece.lower()) == white):
                 continue
@@ -287,23 +322,64 @@ class ChessBoard:
             if pieceType in ["k", "-"]:
                 continue
             if piece == "P":
+                if ChessBoard.validSquare((square[0] + 1, square[1] + 1)):  # For captures
+                    existingPiece = self.boardState[square[0] + 1][square[1] + 1]
+                    if (existingPiece != "-" and existingPiece.lower() == existingPiece):
+                        move = Move(piece, square, (square[0] + 1, square[1] + 1), None, None, isDirectCapture=True)
+                        if(ChessBoard.validMove(move, self.boardState.copy(), white, kingSquare)):
+                            if(square[0] == 6):
+                                for promType in ["Q", "N", "B", "R"]:
+                                    out.append(Move(square, (square[0] + 1, square[1] + 1), None, promType, isDirectCapture = True))
+                            else:
+                                out.append(move)
+                if ChessBoard.validSquare((square[0] + 1, square[1] - 1)):
+                    existingPiece = self.boardState[square[0] + 1][square[1] - 1]
+                    if (existingPiece != "-" and existingPiece.lower() == existingPiece):
+                        move = Move(piece, square, (square[0] + 1, square[1] - 1), None, None, isDirectCapture = True)
+                        if(ChessBoard.validMove(move, self.boardState.copy(), white, kingSquare)):
+                            if(square[0] == 6):
+                                for promType in ["Q", "N", "B", "R"]:
+                                    out.append(Move(square, (square[0] + 1, square[1] - 1), None, promType, isDirectCapture = True))
+                            else:
+                                out.append(move)
                 if self.boardState[square[0] + 1][square[1]] == "-" :
                     move = Move(piece, square, (square[0] + 1, square[1]), None, None)
-                    if(ChessBoard.validMove(move, self.boardState.copy(), white, kingSquare)):
-                        if(square[0] == 6):
+                    if(ChessBoard.validMove(move, self.boardState.copy(), white, kingSquare)):  # Normal one square moves
+                        if(square[0] == 6): # In case of promotion
                             for promType in ["Q", "N", "B", "R"]:
                                 out.append(Move(square, (square[0] + 1, square[1]), None, promType))
                         else:
                             out.append(move)
-                    if square[0] == 1 and self.boardState[square[0] + 2][square[1]] == "-":
+                    if square[0] == 1 and self.boardState[square[0] + 2][square[1]] == "-": # Double step
                         move = Move(piece, square, (square[0] + 2, square[1]), None, None)
                         if(ChessBoard.validMove(move, self.boardState.copy(), white, kingSquare)):
                             out.append(move)
-                    elif square[0] == 4 and not(self.enPassant is None) and abs(self.enPassant - square[1]) == 1:
+                    elif square[0] == 4 and not(self.enPassant is None) and abs(self.enPassant - square[1]) == 1: # En passant
                         move = Move(piece, square, (square[0] + 1, self.enPassant), enPassant= True)
                         if(ChessBoard.validMove(move, self.boardState.copy(), white, kingSquare)):
                             out.append(move)
+                    
             elif piece == "p":
+                if ChessBoard.validSquare((square[0] - 1, square[1] + 1)):  # For captures
+                    existingPiece = self.boardState[square[0] - 1][square[1] + 1]
+                    if (existingPiece != "-" and existingPiece.lower() == existingPiece):
+                        move = Move(piece, square, (square[0] - 1, square[1] + 1), None, None, isDirectCapture=True)
+                        if(ChessBoard.validMove(move, self.boardState.copy(), white, kingSquare)):
+                            if(square[0] == 6):
+                                for promType in ["q", "n", "b", "r"]:
+                                    out.append(Move(square, (square[0] - 1, square[1] + 1), None, promType, isDirectCapture = True))
+                            else:
+                                out.append(move)
+                if ChessBoard.validSquare((square[0] - 1, square[1] - 1)):
+                    existingPiece = self.boardState[square[0] - 1][square[1] - 1]
+                    if (existingPiece != "-" and existingPiece.lower() == existingPiece):
+                        move = Move(piece, square, (square[0] - 1, square[1] - 1), None, None, isDirectCapture=True)
+                        if(ChessBoard.validMove(move, self.boardState.copy(), white, kingSquare)):
+                            if(square[0] == 6):
+                                for promType in ["q", "n", "b", "r"]:
+                                    out.append(Move(square, (square[0] - 1, square[1] - 1), None, promType, isDirectCapture = True))
+                            else:
+                                out.append(move)
                 if self.boardState[square[0] - 1][square[1]] == "-" :
                     move = Move(piece, square, (square[0] - 1, square[1]), None, None)
                     if(ChessBoard.validMove(move, self.boardState.copy(), white, kingSquare)):
@@ -330,7 +406,7 @@ class ChessBoard:
                             out.append(move)
                         continue
                     elif((squarePiece.lower() == squarePiece) == white):
-                        if(ChessBoard.validMove(move, self.boardState.copy(), white, kingSquare)):
+                        if(ChessBoard.validMove(move, self.boardState.copy(), white, kingSquare,)):
                             out.append(move)
                     break
                 for i in range(1, 8 - square[1]):
@@ -342,6 +418,7 @@ class ChessBoard:
                             out.append(move)
                         continue
                     elif((squarePiece.lower() == squarePiece) == white):
+                        move.isDirectCapture = True
                         if(ChessBoard.validMove(move, self.boardState.copy(), white, kingSquare)):
                             out.append(move)
                     break
@@ -354,6 +431,7 @@ class ChessBoard:
                             out.append(move)
                         continue
                     elif((squarePiece.lower() == squarePiece) == white):
+                        move.isDirectCapture = True
                         if(ChessBoard.validMove(move, self.boardState.copy(), white, kingSquare)):
                             out.append(move)
                     break
@@ -366,6 +444,7 @@ class ChessBoard:
                             out.append(move)
                         continue
                     elif((squarePiece.lower() == squarePiece) == white):
+                        move.isDirectCapture = True
                         if(ChessBoard.validMove(move, self.boardState.copy(), white, kingSquare)):
                             out.append(move)
                     break
@@ -379,6 +458,7 @@ class ChessBoard:
                             out.append(move)
                         continue
                     elif((squarePiece.lower() == squarePiece) == white):
+                        move.isDirectCapture = True
                         if(ChessBoard.validMove(move, self.boardState.copy(), white, kingSquare)):
                             out.append(move)
                     break
@@ -391,6 +471,7 @@ class ChessBoard:
                             out.append(move)
                         continue
                     elif((squarePiece.lower() == squarePiece) == white):
+                        move.isDirectCapture = True
                         if(ChessBoard.validMove(move, self.boardState.copy(), white, kingSquare)):
                             out.append(move)
                     break           
@@ -403,6 +484,7 @@ class ChessBoard:
                             out.append(move)
                         continue
                     elif((squarePiece.lower() == squarePiece) == white):
+                        move.isDirectCapture = True
                         if(ChessBoard.validMove(move, self.boardState.copy(), white, kingSquare)):
                             out.append(move)
                     break
@@ -415,6 +497,7 @@ class ChessBoard:
                             out.append(move)
                         continue
                     elif((squarePiece.lower() == squarePiece) == white):
+                        move.isDirectCapture = True
                         if(ChessBoard.validMove(move, self.boardState.copy(), white, kingSquare)):
                             out.append(move)
                     break  
@@ -423,8 +506,108 @@ class ChessBoard:
                     newSquare = (square[0] + permutation[0], square[1] + permutation[1])
                     if(not ChessBoard.validSquare(newSquare)):
                         continue
-                    move = Move(piece, square, newSquare, None, None)
-                    if(ChessBoard.validMove(move, self.boardState.copy(), white, kingSquare)):
-                        out.append(move)
+                    existingPiece = self.boardState[newSquare[0]][newSquare[1]]
+                    if existingPiece == "-":
+                        move = Move(piece, square, newSquare, None, None)
+                        if(ChessBoard.validMove(move, self.boardState.copy(), white, kingSquare)):  
+                            out.append(move)
+                    elif (existingPiece.lower() == existingPiece) == white:
+                        move = Move(piece, square, newSquare, isDirectCapture = True)
+                        if(ChessBoard.validMove(move, self.boardState.copy(), white, kingSquare)):  
+                            out.append(move)
+                    
         return out
-            
+    def makeMove(self, move: Move) -> ChessBoard: 
+        out = ChessBoard.__new__(ChessBoard)
+        
+        out.whitesTurn = not self.whitesTurn
+        out.castling = self.castling.copy()
+        out.kings = self.kings.copy()
+        out.moveNumber = self.moveNumber + (not self.whitesTurn)
+        if (move.isDirectCapture or not (move.enPassant is None) or move.piece.lower() == "p"):
+            out.halfMoves = 0
+        else:
+            out.halfMoves += 1
+        if move.piece == "K" and move.castleType is None:
+            out.castling[0] = False
+            out.castling[1] = False
+        if move.piece == "k" and move.castleType is None:
+            out.castling[2] = False
+            out.castling[3] = False
+        out.castling[0] = (out.castling[0] and (not move.oldSquare == (0,7)) and (not move.newSquare == (0,7)))
+        out.castling[1] = (out.castling[1] and (not move.oldSquare == (0,0)) and (not move.newSquare == (0,0)))
+        out.castling[2] = (out.castling[2] and (not move.oldSquare == (7,7)) and (not move.newSquare == (7,7)))
+        out.castling[3] = (out.castling[3] and (not move.oldSquare == (7,0)) and (not move.newSquare == (7,0)))
+
+        out.boardState = self.boardState.copy()
+        if not (move.piece is None) and move.piece.lower() == "p" and abs(move.oldSquare[0] - move.newSquare[0]) == 2:
+            out.enPassant = move.newSquare[1]
+        else:
+            out.enPassant = None
+
+        out.positions = []
+        out.positions.append(self.positions[0].copy())
+        out.positions.append(self.positions[1].copy())
+
+        if not (move.piece is None) and move.piece.lower() != "k":
+            out.positions[out.whitesTurn].remove(move.oldSquare)
+            out.positions[out.whitesTurn].append(move.newSquare)
+
+            if move.isDirectCapture:
+                out.positions[self.whitesTurn].remove(move.newSquare)
+            elif move.enPassant:
+                out.positions[self.whitesTurn].remove((move.oldSquare[0], move.newSquare[1]))
+        else:
+            if move.castleType is None:
+                out.kings[out.whitesTurn] = move.newSquare
+
+                if move.isDirectCapture:
+                    out.positions[self.whitesTurn].remove(move.newSquare)
+            else:
+                if move.castleType == "k":
+                    out.kings[out.whitesTurn] = (7, 6)
+
+                    out.positions[out.whitesTurn].remove((7, 7))
+                    out.positions[out.whitesTurn].append((7, 5))
+                elif move.castleType == "q":
+                    out.kings[out.whitesTurn] = (7, 2)
+
+                    out.positions[out.whitesTurn].remove((7, 0))
+                    out.positions[out.whitesTurn].append((7, 3))
+                elif move.castleType == "K":
+                    out.kings[out.whitesTurn] = (0, 6)
+
+                    out.positions[out.whitesTurn].remove((0, 7))
+                    out.positions[out.whitesTurn].append((0, 5))
+                elif move.castleType == "Q":
+                    out.kings[out.whitesTurn] = (0, 2)
+
+                    out.positions[out.whitesTurn].remove((0, 0))
+                    out.positions[out.whitesTurn].append((0, 3))
+        if(move.enPassant):
+            out.boardState[move.oldSquare[0]] = out.boardState[move.oldSquare[0]][:min(move.oldSquare[1], move.newSquare[1])] + "--" + out.boardState[move.oldSquare[0]][max(move.oldSquare[1], move.newSquare[1]) + 1: ]
+            out.boardState[move.newSquare[0]] = out.boardState[move.newSquare[0]][: move.newSquare[1]] + move.piece + out.boardState[move.newSquare[0]][move.newSquare[1] + 1: ]
+        elif not(move.castleType is None):
+            print("a", move.castleType, len(move.castleType), move.castleType =="k")
+            if move.castleType == "K":
+                out.boardState[0] = out.boardState[0][:4] + "-RK-"
+                out.castling[0] = False
+                out.castling[1] = False
+
+            elif move.castleType == "Q":
+                out.boardState[0] = "--KR-" + out.boardState[0][5:]
+                out.castling[0] = False
+                out.castling[1] = False
+            elif move.castleType == "k":
+                print("b")
+                out.boardState[7] = out.boardState[7][:4] + "-rk-"
+                out.castling[2] = False
+                out.castling[3] = False
+            elif move.castleType == "q":
+                out.boardState[7] = "--kr-" + out.boardState[7][5:]
+                out.castling[2] = False
+                out.castling[3] = False
+        else:
+            out.boardState[move.newSquare[0]] = out.boardState[move.newSquare[0]][:move.newSquare[1]] + move.piece + out.boardState[move.newSquare[0]][move.newSquare[1] + 1:]
+            out.boardState[move.oldSquare[0]] = out.boardState[move.oldSquare[0]][:move.oldSquare[1]] + '-' + out.boardState[move.oldSquare[0]][move.oldSquare[1] + 1:]
+        return out
