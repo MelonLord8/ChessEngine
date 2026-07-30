@@ -85,6 +85,8 @@ class ChessBoard:
                 else:
                     self.positions[square.lower() == square].append((i,j))
         self.possibleMoves = self.exploreMoves()
+        self.threeMoveString = ''.join(self.boardState) + castleString + ("w" if self.whitesTurn else "b")
+        self.threeMoveDict = {}
     def print(self, flip: bool = False):
         if not flip:
             for i in range(7, -1, -1):
@@ -524,10 +526,7 @@ class ChessBoard:
         out.castling = self.castling.copy()
         out.kings = self.kings.copy()
         out.moveNumber = self.moveNumber + (not self.whitesTurn)
-        if (move.isDirectCapture or not (move.enPassant is None) or move.piece.lower() == "p"):
-            out.halfMoves = 0
-        else:
-            out.halfMoves += 1
+                  
         if move.piece == "K" and move.castleType is None:
             out.castling[0] = False
             out.castling[1] = False
@@ -588,7 +587,6 @@ class ChessBoard:
             out.boardState[move.oldSquare[0]] = out.boardState[move.oldSquare[0]][:min(move.oldSquare[1], move.newSquare[1])] + "--" + out.boardState[move.oldSquare[0]][max(move.oldSquare[1], move.newSquare[1]) + 1: ]
             out.boardState[move.newSquare[0]] = out.boardState[move.newSquare[0]][: move.newSquare[1]] + move.piece + out.boardState[move.newSquare[0]][move.newSquare[1] + 1: ]
         elif not(move.castleType is None):
-            print("a", move.castleType, len(move.castleType), move.castleType =="k")
             if move.castleType == "K":
                 out.boardState[0] = out.boardState[0][:4] + "-RK-"
                 out.castling[0] = False
@@ -599,7 +597,6 @@ class ChessBoard:
                 out.castling[0] = False
                 out.castling[1] = False
             elif move.castleType == "k":
-                print("b")
                 out.boardState[7] = out.boardState[7][:4] + "-rk-"
                 out.castling[2] = False
                 out.castling[3] = False
@@ -610,4 +607,190 @@ class ChessBoard:
         else:
             out.boardState[move.newSquare[0]] = out.boardState[move.newSquare[0]][:move.newSquare[1]] + move.piece + out.boardState[move.newSquare[0]][move.newSquare[1] + 1:]
             out.boardState[move.oldSquare[0]] = out.boardState[move.oldSquare[0]][:move.oldSquare[1]] + '-' + out.boardState[move.oldSquare[0]][move.oldSquare[1] + 1:]
+
+        if (move.isDirectCapture or move.piece.lower() == "p" or out.castling != self.castling):
+            out.halfMoves = 0
+            out.threeMoveDict = {}
+        else:
+            out.halfMoves += 1
+            out.threeMoveDict = self.threeMoveDict.copy()
+            if(self.threeMoveString in out.threeMoveDict):
+                out.threeMoveDict[self.threeMoveString] += 1
+            else:
+                out.threeMoveDict[self.threeMoveString] = 1
+        castleString = ""
+        if out.castling[0]:
+            castleString += "K"
+        if out.castling[1]:
+            castleString += "Q"
+        if out.castling[2]:
+            castleString += "k"
+        if out.castling[3]:
+            castleString += "q"
+        out.threeMoveString =''.join(out.boardState) + castleString + ("w" if out.whitesTurn else "b") + ( "8" if out.enPassant is None else str(out.self.enPassant))
         return out
+
+    def checkmate(self):
+        return (len(self.possibleMoves) == 0) and self.kingInCheck() 
+    def enoughMaterial(self):
+        if(len(self.positions[0]) + len(self.positions[1]) >= 2):
+            return True  
+        if(len(self.positions[0]) + len(self.positions[1]) == 0):
+            return False
+          
+        if(len(self.positions[0]) == 0):
+            position = self.positions[1][0]
+            piece = self.boardState[position[0]][position[1]].lower()
+            return not(piece == "n" or piece == "b")
+        position = self.positions[0][0]
+        piece = self.boardState[position[0]][position[1]].lower()
+        return not(piece == "n" or piece == "b")
+    def isDraw(self):
+        if (self.threeMoveString in self.threeMoveDict):
+            if(self.threeMoveDict[self.threeMoveString] == 2):
+                return True
+        return ((len(self.possibleMoves) == 0) and not self.kingInCheck()) or self.halfMoves >= 100 or not self.enoughMaterial()
+
+class Evaluation:
+    mateWhite: bool | None
+    mateIn: int | None
+    eval: int | None
+    result: int | None
+
+    def __init__(self, eval : int | None = None, mateWhite: bool | None = None, mateIn: int | None = None, result: int | None = None):
+
+        if ((mateWhite is None) != (mateIn is None)):
+            raise ValueError()
+        if not (((eval is None) != ((mateWhite is None) != (result is None))) and not((eval is None) and ((mateWhite is None) and (result is None)))): # Only one
+            raise ValueError()
+
+        self.mateIn = mateIn
+        self.mateWhite = mateWhite
+        self.eval = eval
+        self.result = result
+
+
+    def __eq__(self, other: Evaluation):
+        self_effective_eval = self.eval
+        other_effective_eval = other.eval
+        if not (self.result is None or other.result is None):
+            return self.result == other.result
+        if(self_effective_eval is None and other_effective_eval is None):
+            return (self.mateIn == other.mateIn) and (self.mateWhite == other.mateWhite)
+        if self.result == 0:
+            self_effective_eval = 0
+        if other.result == 0:
+            other_effective_eval = 0
+        return self_effective_eval == other_effective_eval
+    def __gt__(self, other: Evaluation):
+        self_effective_eval = self.eval
+        other_effective_eval = other.eval
+        if (not self.result is None) and (not other.result is None):
+            return self.result > other.result
+        if not (self.result is None):
+            if(self.result == 1):
+                return True
+            if(self.result == -1):
+                return False
+            self_effective_eval = 0
+        if not other.result is None:
+            if(other.result == 1):
+                return False
+            if(other.result == -1):
+                return True
+            other_effective_eval = 0
+        if(self_effective_eval is None):
+            if (other_effective_eval is None):
+                if(self.mateWhite and other.mateWhite):
+                    return self.mateIn < other.mateIn
+                if(self.mateWhite):
+                    return True
+                if(other.mateWhite):
+                    return False 
+                return self.mateIn > other.mateIn
+            return self.mateWhite
+        if(other_effective_eval is None):
+            return not other.mateWhite
+        return self_effective_eval > other_effective_eval
+    
+    def __lt__(self, other: Evaluation):
+        self_effective_eval = self.eval
+        other_effective_eval = other.eval
+        if (not self.result is None) and (not other.result is None):
+            return self.result < other.result
+        if not (self.result is None):
+            if(self.result == 1):
+                return False
+            if(self.result == -1):
+                return True
+            self_effective_eval = 0
+        if not other.result is None:
+            if(other.result == 1):
+                return True
+            if(other.result == -1):
+                return False
+            other_effective_eval = 0
+        if(self_effective_eval is None):
+            if (other_effective_eval is None):
+                if(self.mateWhite and other.mateWhite):
+                    return self.mateIn > other.mateIn
+                if(self.mateWhite):
+                    return False
+                if(other.mateWhite):
+                    return True 
+                return self.mateIn < other.mateIn
+            return not(self.mateWhite)
+        if(other_effective_eval is None):
+            return other.mateWhite
+        return self_effective_eval < other_effective_eval
+
+    def __ge__(self, other: Evaluation):
+        return self == other or self > other
+    def __le__(self, other: Evaluation):
+        return self == other or self < other
+    def __ne__(self, other: Evaluation):
+        return not(self == other)
+class Bot:
+    def eval(self, position: ChessBoard, depth : int):
+        if depth < 0:
+            raise ValueError("Depth must be non-negative")
+        if position.checkmate():
+            return Evaluation(result = 1 if(not position.whitesTurn) else -1)
+        if position.isDraw():
+            return Evaluation(result = 0)
+        if depth == 0:
+            return Evaluation(eval = self.heuristic(position))
+    def heuristic(position: ChessBoard):
+        sum = 0
+
+        for square in position.positions[0]:
+            piece = position.boardState[square[0]][square[1]].lower()
+            match piece:
+                case "p":
+                    sum += 1
+                case "n":
+                    sum += 3
+                case "b":
+                    sum += 3
+                case "r":
+                    sum += 5
+                case "q":
+                    sum += 9
+                case _:
+                    raise ValueError("Board positions invalide, see issue")
+        for square in position.positions[1]:
+            piece = position.boardState[square[0]][square[1]].lower()
+            match piece:
+                case "p":
+                    sum += 1
+                case "n":
+                    sum += 3
+                case "b":
+                    sum += 3
+                case "r":
+                    sum += 5
+                case "q":
+                    sum += 9
+                case _:
+                    raise ValueError("Board positions invalide, see issue")
+        return sum
