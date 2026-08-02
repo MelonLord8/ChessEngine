@@ -777,20 +777,20 @@ class Bot:
                 case "q":
                     sum += 9
                 case _:
-                    raise ValueError("Board positions invalide, see issue")
+                    raise ValueError("Board positions invalid, see issue")
         for square in position.positions[1]:
             piece = position.boardState[square[0]][square[1]].lower()
             match piece:
                 case "p":
-                    sum += 1
+                    sum -= 1
                 case "n":
-                    sum += 3
+                    sum -= 3
                 case "b":
-                    sum += 3
+                    sum -= 3
                 case "r":
-                    sum += 5
+                    sum -= 5
                 case "q":
-                    sum += 9
+                    sum -= 9
                 case _:
-                    raise ValueError("Board positions invalide, see issue")
+                    raise ValueError("Board positions invalid, see issue")
         return sum
