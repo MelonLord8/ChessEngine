@@ -49,20 +49,22 @@ class Move:
         return self.__str__()
 
 class Evaluation:
-    mateWhite: bool | None
+    __slots__ = ('currentWins', 'mateIn', 'eval', 'result')
+
+    currentWins: bool | None
     mateIn: int | None
     eval: int | None
     result: int | None
 
-    def __init__(self, eval : int | None = None, mateWhite: bool | None = None, mateIn: int | None = None, result: int | None = None):
+    def __init__(self, eval : int | None = None, currentWins: bool | None = None, mateIn: int | None = None, result: int | None = None):
 
-        if ((mateWhite is None) != (mateIn is None)):
+        if ((currentWins is None) != (mateIn is None)):
             raise ValueError()
-        if not (not ((eval is None) != ((mateWhite is None) != (result is None))) and not((eval is None) and (mateWhite is None) and (result is None)) ): # Only one
+        if not (not ((eval is None) != ((currentWins is None) != (result is None))) and not((eval is None) and (currentWins is None) and (result is None)) ): # Only one
             raise ValueError()
 
         self.mateIn = mateIn
-        self.mateWhite = mateWhite
+        self.currentWins = currentWins
         self.eval = eval
         self.result = result
 
@@ -73,7 +75,7 @@ class Evaluation:
         if not (self.result is None or other.result is None):
             return self.result == other.result
         if(self_effective_eval is None and other_effective_eval is None):
-            return (self.mateIn == other.mateIn) and (self.mateWhite == other.mateWhite)
+            return (self.mateIn == other.mateIn) and (self.currentWins == other.currentWins)
         if self.result == 0:
             self_effective_eval = 0
         if other.result == 0:
@@ -98,16 +100,16 @@ class Evaluation:
             other_effective_eval = 0
         if(self_effective_eval is None):
             if (other_effective_eval is None):
-                if(self.mateWhite and other.mateWhite):
+                if(self.currentWins and other.currentWins):
                     return self.mateIn < other.mateIn
-                if(self.mateWhite):
+                if(self.currentWins):
                     return True
-                if(other.mateWhite):
+                if(other.currentWins):
                     return False 
                 return self.mateIn > other.mateIn
-            return self.mateWhite
+            return self.currentWins
         if(other_effective_eval is None):
-            return not other.mateWhite
+            return not other.currentWins
         return self_effective_eval > other_effective_eval
     
     def __lt__(self, other: Evaluation):
@@ -129,16 +131,16 @@ class Evaluation:
             other_effective_eval = 0
         if(self_effective_eval is None):
             if (other_effective_eval is None):
-                if(self.mateWhite and other.mateWhite):
+                if(self.currentWins and other.currentWins):
                     return self.mateIn > other.mateIn
-                if(self.mateWhite):
+                if(self.currentWins):
                     return False
-                if(other.mateWhite):
+                if(other.currentWins):
                     return True 
                 return self.mateIn < other.mateIn
-            return not(self.mateWhite)
+            return not(self.currentWins)
         if(other_effective_eval is None):
-            return other.mateWhite
+            return other.currentWins
         return self_effective_eval < other_effective_eval
 
     def __ge__(self, other: Evaluation):
@@ -147,9 +149,17 @@ class Evaluation:
         return self == other or self < other
     def __ne__(self, other: Evaluation):
         return not(self == other)
+
+    def __neg__(self):
+        if self.result is not None:
+            return Evaluation(result=-self.result)
+        if self.currentWins is not None:
+            return Evaluation(currentWins=not self.currentWins, mateIn=self.mateIn)
+        return Evaluation(eval=-self.eval)
+
     def __str__(self):
-        if not(self.mateWhite is None):
-            return("W" if self.mateWhite else "B") + "M" + str(self.mateIn)
+        if not(self.currentWins is None):
+            return("" if self.currentWins else "-") + "M" + str(self.mateIn)
         elif not(self.result is None):
             if(self.result == 1):
                 return "1-0"
@@ -162,18 +172,18 @@ class Evaluation:
     def __repr__(self):
         return self.__str__()
 
-    def step_back(self, whitesTurn: bool):
+    def step_back(self):
         if not (self.result is None):
             if(self.result == 1):
-                return Evaluation(mateWhite = True, mateIn = 1)
+                return Evaluation(currentWins = False, mateIn = 1)
             elif(self.result == -1):
-                return Evaluation(mateWhite = False, mateIn = 1)
+                return Evaluation(currentWins = True, mateIn = 1)
             return self
-        if not(self.mateWhite is None):
-            if(self.mateWhite and whitesTurn):
-                return Evaluation(mateWhite = True, mateIn = self.mateIn + 1)
-            elif((not self.mateWhite) and (not whitesTurn)):
-                return Evaluation(mateWhite= False, mateIn = self.mateIn + 1)
+        if not(self.currentWins is None):
+            if(self.currentWins):
+                return Evaluation(currentWins = False, mateIn = self.mateIn)
+            else:
+                return Evaluation(currentWins = True, mateIn = self.mateIn + 1)
         return self
             
 def validSquare(square : tuple[int, int]):

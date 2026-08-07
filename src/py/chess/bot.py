@@ -3,95 +3,56 @@ from chess.helpers import Evaluation, Move
 class Bot:
     def __init__(self):
         pass
-    def eval(self, position: ChessBoard, depth : int, alpha : Evaluation = Evaluation(result = -1), beta : Evaluation = Evaluation(result = 1)):
+    def eval(self, position: ChessBoard, depth: int, alpha: Evaluation = Evaluation(result=-1), beta: Evaluation = Evaluation(result=1)):
         if depth < 0:
             raise ValueError("Depth must be non-negative")
         if position.checkmate():
-            return Evaluation(result = 1 if(not position.whitesTurn) else -1), []
+            return Evaluation(result=-1), []
         if position.isDraw():
-            return Evaluation(result = 0), []
+            return Evaluation(result=0), []
         if depth == 0:
-            return Evaluation(eval = self.heuristic(position)), []
+            return Evaluation(eval=self.heuristic(position, position.whitesTurn)), []
 
-        moves = position.possibleMoves
-        best_sequence = []
-        if position.whitesTurn:
-            for move in moves:
-                new_state = position.makeMove(move) 
-                new_alpha, sequence = self.eval(new_state, depth - 1, alpha, beta)
-                if(new_alpha > alpha):
-                    alpha = new_alpha
-                    best_sequence = [move] + sequence
-                if(alpha > beta):
-                    break
-            return alpha.step_back(True), best_sequence
-        else:
-            for move in moves:
-                new_state = position.makeMove(move) 
-                new_beta, sequence = self.eval(new_state, depth - 1, alpha, beta)
-                if(new_beta < beta):
-                    beta = new_beta
-                    best_sequence = [move] + sequence
-                if(beta < alpha):
-                    break
-            return beta.step_back(False), best_sequence
+        best_seq = []
+        for move in position.possibleMoves:
+            new_state = position.makeMove(move)
+            score, sequence = self.eval(new_state, depth - 1, -beta, -alpha)
+            score = score.step_back()
+            if(move.oldSquare == (5, 0) and move.newSquare == (7, 0)):
+                print(move, score, depth, sequence)
+            if score > alpha:
+                alpha = score
+                best_seq = [move] + sequence
 
-    def best_move(self, position: ChessBoard, depth: int):
-        if position.checkmate() or position.isDraw():
-            return None
-        moves = position.possibleMoves
-        best_sequence = []
-        if position.whitesTurn:
-            alpha = Evaluation(result = -1)
-            for move in moves:
-                new_state = position.makeMove(move) 
-                result, sequence = self.eval(new_state, depth - 1, alpha = alpha)
-                if(result > alpha):
-                    best_sequence = [move] + sequence 
-                    alpha = result
-            return alpha.step_back(True), best_sequence
-        else:
-            beta = Evaluation(result = 1)
-            for move in moves:
-                new_state = position.makeMove(move) 
-                result, sequence = self.eval(new_state, depth - 1, beta = beta)
-                if(result < beta):
-                    best_sequence = [move] + sequence 
-                    beta = result
-            return beta.step_back(False), best_sequence
+            if alpha > beta:
+                break
+
+        return alpha, best_seq
     @staticmethod
-    def heuristic(position: ChessBoard):
+    def heuristic(position: ChessBoard, whitesTurn: bool):
+        sign = 1 if whitesTurn else -1
         sum = 0
+
         for square in position.positions[0]:
             piece = position.boardState[square[0]][square[1]].lower()
             match piece:
-                case "p":
-                    sum += 1
-                case "n":
-                    sum += 3
-                case "b":
-                    sum += 3
-                case "r":
-                    sum += 5
-                case "q":
-                    sum += 9
-                case _:
-                    raise ValueError("Board positions invalid, see issue")
+                case "p": sum += sign * 1
+                case "n": sum += sign * 3
+                case "b": sum += sign * 3
+                case "r": sum += sign * 5
+                case "q": sum += sign * 9
+                case _: raise ValueError("Board positions invalid, see issue")
+
         for square in position.positions[1]:
             piece = position.boardState[square[0]][square[1]].lower()
             match piece:
-                case "p":
-                    sum -= 1
-                case "n":
-                    sum -= 3
-                case "b":
-                    sum -= 3
-                case "r":
-                    sum -= 5
-                case "q":
-                    sum -= 9
-                case _:
-                    raise ValueError("Board positions invalid, see issue")
+                case "p": sum -= sign * 1
+                case "n": sum -= sign * 3
+                case "b": sum -= sign * 3
+                case "r": sum -= sign * 5
+                case "q": sum -= sign * 9
+                case _: raise ValueError("Board positions invalid, see issue")
+
         return sum
 
     def countPositions(self, position: ChessBoard, depth: int, display = False):
