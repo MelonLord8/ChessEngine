@@ -1,2 +1,5 @@
 .venv/
 src/py/test.py
+.opencode/
+skills-lock.json
+AGENTS.md
